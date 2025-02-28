@@ -51,7 +51,13 @@ def load_spark_df(object_path):
     return df
 
 def load_to_lakehouse(df, table_name):
-    #spark.sql("CREATE NAMESPACE nessie.src;").show()
+    # Check if namespace exists using a try-except approach
+    try:
+        spark.sql("USE nessie.src")
+    except Exception as e:
+        if "SCHEMA_NOT_FOUND" in str(e):
+            spark.sql("CREATE NAMESPACE nessie.src")
+    
     ds_name = "nessie.src." + table_name
     df.writeTo(ds_name).createOrReplace()
 
