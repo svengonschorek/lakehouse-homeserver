@@ -12,9 +12,13 @@ client = Minio(
 )
 
 #Spark config
-CATALOG_URI = "http://nessie:19120/api/v1"  # Nessie Server URI
-WAREHOUSE = "s3://lakehouse/"               # Minio Address to Write to
-STORAGE_URI = "http://" + os.environ['MINIO_ENDPOINT']  # Minio IP address from docker inspect
+NESSIE_HOST = os.environ.get('NESSIE_HOST', 'nessie')
+NESSIE_PORT = os.environ.get('NESSIE_PORT', '19120')
+WAREHOUSE_BUCKET = os.environ.get('WAREHOUSE_BUCKET', 'lakehouse')
+
+CATALOG_URI = f"http://{NESSIE_HOST}:{NESSIE_PORT}/api/v1"  # Nessie Server URI
+WAREHOUSE = f"s3://{WAREHOUSE_BUCKET}/"                     # Minio Address to Write to
+STORAGE_URI = "http://" + os.environ['MINIO_ENDPOINT']      # Minio endpoint from env vars
 
 conf = (
     pyspark.SparkConf()

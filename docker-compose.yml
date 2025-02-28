@@ -1,17 +1,18 @@
 services:
+
   # nessie data catalog
   nessie:
     image: projectnessie/nessie:latest
     container_name: nessie
     environment:
       - QUARKUS_PROFILE=prod
-      - QUARKUS_HTTP_PORT=19120
+      - QUARKUS_HTTP_PORT=${NESSIE_PORT:-19120}
       - QUARKUS_LOG_CONSOLE_FORMAT=%d{yyyy-MM-dd HH:mm:ss} %-5p [%c{1.}] (%t) %s%e%n
       - QUARKUS_LOG_LEVEL=INFO
     volumes:
       - ./nessie-data:/nessie/data  # Mount local directory to persist RocksDB data
     ports:
-      - 19120:19120  # Expose Nessie API port
+      - "${NESSIE_PORT:-19120}:${NESSIE_PORT:-19120}"  # Expose Nessie API port
     networks:
       - homeserver_network
 
@@ -20,11 +21,25 @@ services:
     image: trinodb/trino
     container_name: trino
     ports:
-      - 8082:8080
+      - "${TRINO_PORT:-8082}:8080"
     volumes:
-      - ./config/trino.properties:/etc/trino/catalog/trino.properties
+      - ./config/trino-template.properties:/etc/trino/catalog/trino-template.properties
+      - ./config/setup-trino.sh:/usr/local/bin/setup-trino.sh
     networks:
       - homeserver_network
+    environment:
+      - NESSIE_HOST=${NESSIE_HOST:-nessie}
+      - NESSIE_PORT=${NESSIE_PORT:-19120}
+      - MINIO_HOST=${MINIO_HOST:-minio}
+      - MINIO_PORT=${MINIO_PORT:-9000}
+      - WAREHOUSE_BUCKET=${WAREHOUSE_BUCKET:-lakehouse}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+    entrypoint: ["/usr/local/bin/setup-trino.sh", "/usr/lib/trino/bin/run-trino"]
+    depends_on:
+      - nessie
+    restart: unless-stopped
 
   # spark
   spark-master:
@@ -45,12 +60,23 @@ services:
       - spark-logs:/opt/spark/spark-events
       - ./warehouse:/opt/spark/warehouse
     env_file:
-      - .env.spark
+      - .env
+    environment:
+      - NESSIE_HOST=${NESSIE_HOST:-nessie}
+      - NESSIE_PORT=${NESSIE_PORT:-19120}
+      - MINIO_HOST=${MINIO_HOST:-minio}
+      - MINIO_PORT=${MINIO_PORT:-9000}
+      - WAREHOUSE_BUCKET=${WAREHOUSE_BUCKET:-lakehouse}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
     ports:
-      - '8080:8080'
-      - '7077:7077'
+      - "${SPARK_UI_PORT:-8080}:8080"
+      - "${SPARK_MASTER_PORT:-7077}:7077"
     networks:
       - homeserver_network
+    depends_on:
+      - nessie
 
   spark-history-server:
     container_name: spark-history
@@ -59,14 +85,23 @@ services:
     depends_on:
       - spark-master
     env_file:
-      - .env.spark
+      - .env
+    environment:
+      - NESSIE_HOST=${NESSIE_HOST:-nessie}
+      - NESSIE_PORT=${NESSIE_PORT:-19120}
+      - MINIO_HOST=${MINIO_HOST:-minio}
+      - MINIO_PORT=${MINIO_PORT:-9000}
+      - WAREHOUSE_BUCKET=${WAREHOUSE_BUCKET:-lakehouse}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
     volumes:
       - ./scripts:/opt/spark/scripts
       - ./data:/opt/spark/data
       - spark-logs:/opt/spark/spark-events
       - ./warehouse:/opt/spark/warehouse
     ports:
-      - '18080:18080'
+      - "${SPARK_HISTORY_PORT:-18080}:18080"
     networks:
       - homeserver_network
 
@@ -77,7 +112,16 @@ services:
     depends_on:
       - spark-master
     env_file:
-      - .env.spark
+      - .env
+    environment:
+      - NESSIE_HOST=${NESSIE_HOST:-nessie}
+      - NESSIE_PORT=${NESSIE_PORT:-19120}
+      - MINIO_HOST=${MINIO_HOST:-minio}
+      - MINIO_PORT=${MINIO_PORT:-9000}
+      - WAREHOUSE_BUCKET=${WAREHOUSE_BUCKET:-lakehouse}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
     volumes:
       - ./scripts:/opt/spark/scripts
       - ./data:/opt/spark/data
@@ -91,5 +135,5 @@ volumes:
 
 networks:
   homeserver_network:
-    external:
-      true
+    external: ${USE_EXTERNAL_NETWORK:-true}
+    name: ${NETWORK_NAME:-homeserver_network}
