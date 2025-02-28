@@ -1,0 +1,4 @@
+pyarrow==16.1.0
+pyspark==3.5.1
+delta-spark==3.2.0
+minio==7.2.15

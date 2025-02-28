@@ -1,0 +1,95 @@
+services:
+  # nessie data catalog
+  nessie:
+    image: projectnessie/nessie:latest
+    container_name: nessie
+    environment:
+      - QUARKUS_PROFILE=prod
+      - QUARKUS_HTTP_PORT=19120
+      - QUARKUS_LOG_CONSOLE_FORMAT=%d{yyyy-MM-dd HH:mm:ss} %-5p [%c{1.}] (%t) %s%e%n
+      - QUARKUS_LOG_LEVEL=INFO
+    volumes:
+      - ./nessie-data:/nessie/data  # Mount local directory to persist RocksDB data
+    ports:
+      - 19120:19120  # Expose Nessie API port
+    networks:
+      - homeserver_network
+
+  # trino query engine
+  trino:
+    image: trinodb/trino
+    container_name: trino
+    ports:
+      - 8082:8080
+    volumes:
+      - ./config/trino.properties:/etc/trino/catalog/trino.properties
+    networks:
+      - homeserver_network
+
+  # spark
+  spark-master:
+    container_name: spark-master
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: spark-image
+    entrypoint: ['./entrypoint.sh', 'master']
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    volumes:
+      - ./scripts:/opt/spark/scripts
+      - ./data:/opt/spark/data
+      - spark-logs:/opt/spark/spark-events
+      - ./warehouse:/opt/spark/warehouse
+    env_file:
+      - .env.spark
+    ports:
+      - '8080:8080'
+      - '7077:7077'
+    networks:
+      - homeserver_network
+
+  spark-history-server:
+    container_name: spark-history
+    image: spark-image
+    entrypoint: ['./entrypoint.sh', 'history']
+    depends_on:
+      - spark-master
+    env_file:
+      - .env.spark
+    volumes:
+      - ./scripts:/opt/spark/scripts
+      - ./data:/opt/spark/data
+      - spark-logs:/opt/spark/spark-events
+      - ./warehouse:/opt/spark/warehouse
+    ports:
+      - '18080:18080'
+    networks:
+      - homeserver_network
+
+  spark-worker:
+    container_name: spark-worker
+    image: spark-image
+    entrypoint: ['./entrypoint.sh', 'worker']
+    depends_on:
+      - spark-master
+    env_file:
+      - .env.spark
+    volumes:
+      - ./scripts:/opt/spark/scripts
+      - ./data:/opt/spark/data
+      - spark-logs:/opt/spark/spark-events
+      - ./warehouse:/opt/spark/warehouse
+    networks:
+      - homeserver_network
+
+volumes:
+  spark-logs:
+
+networks:
+  homeserver_network:
+    external:
+      true
