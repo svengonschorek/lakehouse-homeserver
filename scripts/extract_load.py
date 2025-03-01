@@ -80,6 +80,5 @@ if __name__ == "__main__":
             df = load_spark_df(obj._object_name)
             load_to_lakehouse(df, table_name)
 
-            # check if table is available
-            spark.read.table("nessie.src." + table_name).show()
+            # stop spark executor
             spark.stop()
