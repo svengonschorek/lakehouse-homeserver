@@ -1,18 +1,24 @@
 services:
 
-  # nessie data catalog
-  nessie:
-    image: projectnessie/nessie:latest
-    container_name: nessie
+  # iceberg rest catalog service
+  rest-catalog:
+    image: tabulario/iceberg-rest:1.6.0
+    container_name: rest-catalog
     environment:
-      - QUARKUS_PROFILE=prod
-      - QUARKUS_HTTP_PORT=${NESSIE_PORT:-19120}
-      - QUARKUS_LOG_CONSOLE_FORMAT=%d{yyyy-MM-dd HH:mm:ss} %-5p [%c{1.}] (%t) %s%e%n
-      - QUARKUS_LOG_LEVEL=INFO
-    volumes:
-      - ./nessie-data:/nessie/data  # Mount local directory to persist RocksDB data
+      # Core Iceberg catalog config
+      - CATALOG_IMPL=org.apache.iceberg.rest.RESTCatalog
+      - CATALOG_S3_ENDPOINT=http://${MINIO_HOST:-minio}:${MINIO_PORT:-9000}
+      - CATALOG_WAREHOUSE=s3://${WAREHOUSE_BUCKET:-lakehouse}/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      # AWS credentials
+      - AWS_S3_ENDPOINT=http://${MINIO_HOST:-minio}:${MINIO_PORT:-9000}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY}
+    env_file:
+      - .env
     ports:
-      - "${NESSIE_PORT:-19120}:${NESSIE_PORT:-19120}"  # Expose Nessie API port
+      - "${REST_PORT:-8181}:8181"
     networks:
       - homeserver_network
 
@@ -28,17 +34,16 @@ services:
     networks:
       - homeserver_network
     environment:
-      - NESSIE_HOST=${NESSIE_HOST:-nessie}
-      - NESSIE_PORT=${NESSIE_PORT:-19120}
+      - REST_HOST=${REST_HOST:-rest-catalog}
+      - REST_PORT=${REST_PORT:-8181}
       - MINIO_HOST=${MINIO_HOST:-minio}
       - MINIO_PORT=${MINIO_PORT:-9000}
-      - WAREHOUSE_BUCKET=${WAREHOUSE_BUCKET:-lakehouse}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - WAREHOUSE_BUCKET=${WAREHOUSE_BUCKET:-lakehouse}
     entrypoint: ["/usr/local/bin/setup-trino.sh", "/usr/lib/trino/bin/run-trino"]
     depends_on:
-      - nessie
+      - rest-catalog
     restart: unless-stopped
 
   # spark
@@ -62,8 +67,8 @@ services:
     env_file:
       - .env
     environment:
-      - NESSIE_HOST=${NESSIE_HOST:-nessie}
-      - NESSIE_PORT=${NESSIE_PORT:-19120}
+      - REST_HOST=${REST_HOST:-rest-catalog}
+      - REST_PORT=${REST_PORT:-8181}
       - MINIO_HOST=${MINIO_HOST:-minio}
       - MINIO_PORT=${MINIO_PORT:-9000}
       - WAREHOUSE_BUCKET=${WAREHOUSE_BUCKET:-lakehouse}
@@ -76,7 +81,7 @@ services:
     networks:
       - homeserver_network
     depends_on:
-      - nessie
+      - rest-catalog
 
   spark-history-server:
     container_name: spark-history
@@ -87,8 +92,8 @@ services:
     env_file:
       - .env
     environment:
-      - NESSIE_HOST=${NESSIE_HOST:-nessie}
-      - NESSIE_PORT=${NESSIE_PORT:-19120}
+      - REST_HOST=${REST_HOST:-rest-catalog}
+      - REST_PORT=${REST_PORT:-8181}
       - MINIO_HOST=${MINIO_HOST:-minio}
       - MINIO_PORT=${MINIO_PORT:-9000}
       - WAREHOUSE_BUCKET=${WAREHOUSE_BUCKET:-lakehouse}
@@ -114,8 +119,8 @@ services:
     env_file:
       - .env
     environment:
-      - NESSIE_HOST=${NESSIE_HOST:-nessie}
-      - NESSIE_PORT=${NESSIE_PORT:-19120}
+      - REST_HOST=${REST_HOST:-rest-catalog}
+      - REST_PORT=${REST_PORT:-8181}
       - MINIO_HOST=${MINIO_HOST:-minio}
       - MINIO_PORT=${MINIO_PORT:-9000}
       - WAREHOUSE_BUCKET=${WAREHOUSE_BUCKET:-lakehouse}

@@ -74,8 +74,8 @@ RUN curl https://repo1.maven.org/maven2/org/apache/hudi/hudi-spark3-bundle_2.12/
 RUN curl https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar -Lo /opt/spark/jars/hadoop-aws-3.3.4.jar
 RUN curl https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.648/aws-java-sdk-bundle-1.12.648.jar -Lo /opt/spark/jars/aws-java-sdk-bundle-1.12.648.jar
 
-# Download nessie jars
-RUN curl https://repo1.maven.org/maven2/org/projectnessie/nessie-integrations/nessie-spark-extensions-3.5_2.12/0.102.0/nessie-spark-extensions-3.5_2.12-0.102.0.jar -Lo /opt/spark/jars/nessie-spark-extensions-3.5_2.12-0.102.0.jar
+# Download REST catalog jars
+RUN curl https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-rest-client/1.4.3/iceberg-rest-client-1.4.3.jar -Lo /opt/spark/jars/iceberg-rest-client-1.4.3.jar
 
 COPY entrypoint.sh .
 RUN chmod u+x /opt/spark/entrypoint.sh
