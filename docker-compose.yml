@@ -85,7 +85,7 @@ services:
     image: spark-image
     entrypoint: ['./entrypoint.sh', 'master']
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
+      test: [ "CMD", "curl", "-f", "http://spark-master:8080" ]
       interval: 5s
       timeout: 3s
       retries: 3

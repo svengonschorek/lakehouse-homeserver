@@ -46,7 +46,7 @@ FROM spark-base AS pyspark
 COPY requirements.txt .
 RUN pip3 install -r requirements.txt
 
-COPY config/spark-defaults.conf "$SPARK_HOME/conf"
+COPY ./config/spark-defaults.conf "$SPARK_HOME/conf"
 
 RUN chmod u+x /opt/spark/sbin/* && \
     chmod u+x /opt/spark/bin/*
