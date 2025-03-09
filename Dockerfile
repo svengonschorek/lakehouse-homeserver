@@ -19,7 +19,7 @@ RUN apt-get update && \
 # ENV variables
 ENV SPARK_HOME=${SPARK_HOME:-"/opt/spark"}
 ENV HADOOP_HOME=${HADOOP_HOME:-"/opt/hadoop"}
-ENV SPARK_VERSION=3.5.2
+ENV SPARK_VERSION=3.5.5
 ENV PYTHONPATH=$SPARK_HOME/python/
 
 ENV PATH="/opt/spark/sbin:/opt/spark/bin:${PATH}"
@@ -36,7 +36,7 @@ WORKDIR ${SPARK_HOME}
 
 # Download spark
 RUN mkdir -p ${SPARK_HOME} \
-    && curl -L https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz -o spark-${SPARK_VERSION}-bin-hadoop3.tgz \
+    && curl -L https://dlcdn.apache.org/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz -o spark-${SPARK_VERSION}-bin-hadoop3.tgz \
     && tar xvzf spark-${SPARK_VERSION}-bin-hadoop3.tgz --directory /opt/spark --strip-components 1 \
     && rm -rf spark-${SPARK_VERSION}-bin-hadoop3.tgz
 
@@ -79,6 +79,3 @@ RUN curl https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-rest-client/1
 
 COPY entrypoint.sh .
 RUN chmod u+x /opt/spark/entrypoint.sh
-
-ENTRYPOINT ["./entrypoint.sh"]
-CMD [ "bash" ]
