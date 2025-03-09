@@ -1,5 +1,4 @@
 services:
-
   # iceberg rest catalog service
   rest-catalog:
     image: tabulario/iceberg-rest:1.6.0
@@ -15,12 +14,43 @@ services:
       - AWS_REGION=${AWS_REGION:-us-east-1}
       - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY}
+      # Postgres config
+      - CATALOG_URI=jdbc:postgresql://postgres/iceberg_catalog
+      - CATALOG_JDBC_USER=${CATALOG_JDBC_USER}
+      - CATALOG_JDBC_PASSWORD=${CATALOG_JDBC_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
     env_file:
       - .env
     ports:
       - "${REST_PORT:-8181}:8181"
     networks:
       - homeserver_network
+  
+  # postgres database to store catalog data
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      POSTGRES_USER: ${CATALOG_JDBC_USER}
+      POSTGRES_PASSWORD: ${CATALOG_JDBC_PASSWORD}
+      POSTGRES_DB: iceberg_catalog
+      POSTGRES_HOST_AUTH_METHOD: md5
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d iceberg_catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      homeserver_network:
 
   # trino query engine
   trino:
@@ -29,7 +59,7 @@ services:
     ports:
       - "${TRINO_PORT:-8082}:8080"
     volumes:
-      - ./config/trino-template.properties:/etc/trino/catalog/trino-template.properties
+      - ./config/iceberg-template.properties:/etc/trino/catalog/iceberg-template.properties
       - ./config/setup-trino.sh:/usr/local/bin/setup-trino.sh
     networks:
       - homeserver_network
@@ -137,6 +167,7 @@ services:
 
 volumes:
   spark-logs:
+  postgres_data:
 
 networks:
   homeserver_network:

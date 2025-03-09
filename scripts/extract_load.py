@@ -1,4 +1,4 @@
-import os, sys, pyspark
+import os, sys, pyspark, datetime
 
 from minio import Minio
 from pyspark.sql import SparkSession
@@ -121,6 +121,12 @@ if __name__ == "__main__":
                 # Write to Iceberg table
                 load_to_lakehouse(df, table_name)
                 print(f"Successfully loaded data to table: iceberg.src.{table_name}")
+
+                # Expire Snapshots
+                current_timestamp = datetime.datetime.now()
+                three_days_ago= current_timestamp + datetime.timedelta(days=-3)
+                spark.sql(f"CALL iceberg.system.expire_snapshots('src.{table_name}',TIMESTAMP '{three_days_ago}')")
+                print(f"Successfully expired snapshots for: iceberg.src.{table_name} until {three_days_ago}.")
                 
                 # Stop Spark session
                 print("Stopping Spark session")
