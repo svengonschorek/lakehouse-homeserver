@@ -1,10 +1,10 @@
 # Lakehouse Data Platform
 
-A complete data lakehouse platform with Spark, Trino, and Nessie.
+A complete data lakehouse platform with Spark, Trino, and Iceberg REST catalog.
 
 ## Components
 
-- **Nessie**: Git-like data catalog service
+- **Iceberg REST**: REST data catalog service
 - **Trino**: SQL query engine
 - **Spark**: Data processing engine
 
@@ -34,7 +34,6 @@ A complete data lakehouse platform with Spark, Trino, and Nessie.
    - Trino UI: http://localhost:8082
    - Spark UI: http://localhost:8080
    - Spark History Server: http://localhost:18080
-   - Nessie UI: http://localhost:19120
 
 ### Environment Variables
 
@@ -46,8 +45,6 @@ All configuration is done through environment variables in the `.env` file:
 | MINIO_PORT | MinIO API port |
 | MINIO_ACCESS_KEY | MinIO access key |
 | MINIO_SECRET_KEY | MinIO secret key |
-| NESSIE_HOST | Nessie hostname |
-| NESSIE_PORT | Nessie API port |
 | WAREHOUSE_BUCKET | S3 bucket for data warehouse |
 | USE_EXTERNAL_NETWORK | Use external Docker network |
 | NETWORK_NAME | Docker network name |
@@ -72,7 +69,7 @@ docker exec -it trino trino
 
 ```sql
 -- In Trino CLI
-USE nessie.src;
+USE iceberg.src;
 SELECT * FROM your_table LIMIT 10;
 ```
 
@@ -95,7 +92,7 @@ This lakehouse can be used with dbt for data transformations. To connect dbt:
          host: localhost
          port: 8082
          user: trino
-         catalog: nessie
+         catalog: iceberg
          schema: src
    ```
 
@@ -110,6 +107,7 @@ For server deployment:
 
 ## Maintenance
 
+- **Garbage Collection**: In trino using `ALTER TABLE src.s3_binance_orders_spot EXECUTE expire_snapshots(retention_threshold => '7d');`. For Spark it is done in the extract_load.py script.
 - **Scaling**: Add more Spark workers by scaling that service
 - **Monitoring**: Consider adding Prometheus/Grafana for monitoring
 
