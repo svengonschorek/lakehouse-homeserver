@@ -51,94 +51,130 @@ conf = (
         .set("spark.sql.catalog.iceberg.s3.secret-access-key", os.environ['AWS_SECRET_ACCESS_KEY'])
 )
 
-def load_spark_df(object_path):
-    # Define MinIO Path (use s3a:// prefix)
-    minio_path = "s3a://datalake/" + object_path
 
-    # Read Parquet file
-    df = spark.read.parquet(minio_path)
+def get_loaded_files(table_name):
+    """Retrieve list of previously loaded files from Iceberg metadata table."""
+    try:
+        df = spark.sql(f"SELECT file_path FROM iceberg.metadata.{table_name}_loaded_files")
+        return set(row.file_path for row in df.collect())
+    except:
+        return set()  # If metadata table does not exist, assume no files loaded
 
-    # Show DataFrame contents
-    return df
+def save_loaded_files(table_name, file_paths):
+    """Save newly processed files to metadata table."""
+    df = spark.createDataFrame([(path,) for path in file_paths], ["file_path"])
+    df.write.mode("append").saveAsTable(f"iceberg.metadata.{table_name}_loaded_files")
 
-def load_to_lakehouse(df, table_name):
-    print(f"Starting to load data to lakehouse table: {table_name}")
-    
+def load_spark_df(file_list):
+    """Load multiple parquet files into a DataFrame."""
+    if not file_list:
+        return None
+    file_paths = [f"s3a://datalake/{path}" for path in file_list]
+    return spark.read.parquet(*file_paths)
+
+def load_to_lakehouse(df, table_name, load_type):
+    print(f"Loading data to lakehouse table: {table_name} as {load_type} load")
+
     # Create namespace if it doesn't exist
-    try:
-        spark.sql("CREATE NAMESPACE IF NOT EXISTS iceberg.src")
-        print("Namespace iceberg.src exists or was created")
-    except Exception as e:
-        print(f"Error checking namespace: {str(e)}")
-    
-    # Use catalog.schema.table format for writing
-    ds_name = "iceberg.src." + table_name
+    spark.sql("CREATE NAMESPACE IF NOT EXISTS iceberg.src")
+
+    ds_name = f"iceberg.src.{table_name}"
     print(f"Writing to table: {ds_name}")
-    
+
+    # Check if the table exists
+    table_exists = False
     try:
-        # Add additional properties to make tables compatible with Trino
-        # Using more minimal options to avoid S3 configuration conflicts
-        print("Starting table write operation")
-        df.writeTo(ds_name) \
-          .option("write.format.default", "parquet") \
-          .option("format-version", "2") \
-          .createOrReplace()
-        print("Table write operation completed successfully")
+        table_check = spark.sql(f"SHOW TABLES IN iceberg.src LIKE '{table_name}'")
+        if table_check.count() > 0:
+            table_exists = True
+    except:
+        table_exists = False
+
+    try:
+        if load_type == "full":
+            df.writeTo(ds_name) \
+              .option("write.format.default", "parquet") \
+              .option("format-version", "2") \
+              .createOrReplace()
+        else:
+            if table_exists:
+                df.writeTo(ds_name) \
+                  .option("write.format.default", "parquet") \
+                  .option("format-version", "2") \
+                  .append()
+            else:
+                print(f"Table {ds_name} does not exist, creating it now.")
+                df.writeTo(ds_name) \
+                  .option("write.format.default", "parquet") \
+                  .option("format-version", "2") \
+                  .create()
+
+        print(f"{load_type.capitalize()} load operation completed successfully")
+
     except Exception as e:
         print(f"Error writing to table: {str(e)}")
         raise
 
-
 if __name__ == "__main__":
     try:
-        # Get input table name
-        table_name = sys.argv[1]
-        print(f"Processing table: {table_name}")
+        if len(sys.argv) < 3:
+            print("Usage: extract_load.py <table_name> <load_type: full|incremental>")
+            sys.exit(1)
 
-        # Initialize SparkSession with detailed configuration
+        table_name = sys.argv[1]
+        load_type = sys.argv[2].lower()  # "full" or "incremental"
+        print(f"Processing table: {table_name} with {load_type} load")
+
         print("Initializing Spark session")
         spark = SparkSession.builder.config(conf=conf).getOrCreate()
-        print(f"Spark session created, version: {spark.version}")
         
-        # Print S3 configuration for debugging
+        print(f"Spark session created, version: {spark.version}")
         print(f"S3 endpoint: {STORAGE_URI}")
         print(f"Warehouse location: {WAREHOUSE}")
         print(f"REST catalog URI: {CATALOG_URI}")
 
-        # List objects from MinIO
+        # List objects in MinIO
         print("Listing objects from datalake")
-        objects = client.list_objects("datalake", recursive=True, prefix="airbyte/")
-        found = False
-        
-        # Process matching objects
-        for obj in objects:
-            if table_name in obj._object_name:
-                found = True
-                print(f"Found matching object: {obj._object_name}")
-                df = load_spark_df(obj._object_name)
-                print(f"Loaded DataFrame with {df.count()} rows")
-                
-                # Write to Iceberg table
-                load_to_lakehouse(df, table_name)
-                print(f"Successfully loaded data to table: iceberg.src.{table_name}")
+        objects = client.list_objects("datalake", recursive=True, prefix=f"airbyte/{table_name}/")
+        file_list = [obj.object_name for obj in objects]
 
-                # Expire Snapshots
-                current_timestamp = datetime.datetime.now()
-                three_days_ago= current_timestamp + datetime.timedelta(days=-3)
-                spark.sql(f"CALL iceberg.system.expire_snapshots('src.{table_name}',TIMESTAMP '{three_days_ago}')")
-                print(f"Successfully expired snapshots for: iceberg.src.{table_name} until {three_days_ago}.")
-                
-                # Stop Spark session
-                print("Stopping Spark session")
-                spark.stop()
-                break
+        if not file_list:
+            print(f"No files found for table: {table_name}")
+            sys.exit(0)
+
+        if load_type == "full":
+            # Always load the latest file, ignore tracking
+            latest_file = sorted(file_list)[-1]  # Assuming lexicographical order corresponds to timestamps
+            df = load_spark_df([latest_file])
+            if df:
+                print(f"Loaded DataFrame with {df.count()} rows")
+                load_to_lakehouse(df, table_name, load_type)
+                print(f"Successfully performed full load for iceberg.src.{table_name}")
         
-        if not found:
-            print(f"No objects found matching table name: {table_name}")
+        else:  # Incremental Load
+            loaded_files = get_loaded_files(table_name)
+            new_files = [f for f in file_list if f not in loaded_files]
+            print(f"New files found: {len(new_files)}")
+
+            if new_files:
+                df = load_spark_df(new_files)
+                if df:
+                    print(f"Loaded DataFrame with {df.count()} rows")
+                    load_to_lakehouse(df, table_name, load_type)
+                    save_loaded_files(table_name, new_files)
+                    print(f"Successfully loaded new files to iceberg.src.{table_name}")
+        
+        # Expire Snapshots
+        current_timestamp = datetime.datetime.now()
+        three_days_ago = current_timestamp + datetime.timedelta(days=-3)
+        spark.sql(f"CALL iceberg.system.expire_snapshots('src.{table_name}', TIMESTAMP '{three_days_ago}')")
+        print(f"Successfully expired snapshots for: iceberg.src.{table_name} until {three_days_ago}.")
+
+        print("Stopping Spark session")
+        spark.stop()
     
     except Exception as e:
         print(f"ERROR: {str(e)}")
-        # Print more detailed error information
         import traceback
         traceback.print_exc()
         sys.exit(1)
