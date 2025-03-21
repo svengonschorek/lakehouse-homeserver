@@ -118,7 +118,7 @@ def load_to_lakehouse(df, table_name, load_type):
 if __name__ == "__main__":
     try:
         if len(sys.argv) < 3:
-            print("Usage: extract_load.py <table_name> <load_type: full|incremental>")
+            print("Usage: extract_load.py <table_name> <load_type: full | incremental>")
             sys.exit(1)
 
         table_name = sys.argv[1]
