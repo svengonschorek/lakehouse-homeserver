@@ -2,7 +2,6 @@ import os, sys, pyspark, datetime
 
 from minio import Minio
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
 
 # Minio client config
 client = Minio(
@@ -90,9 +89,6 @@ def load_to_lakehouse(df, table_name, load_type):
             table_exists = True
     except:
         table_exists = False
-
-    # manual transform - specify _airbyte_emitted_at as bigint
-    df.withColumn("_airbyte_emitted_at", col("_airbyte_emitted_at").cast("bigint"))
 
     try:
         if load_type == "full":
