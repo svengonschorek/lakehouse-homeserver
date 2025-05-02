@@ -56,8 +56,9 @@ All configuration is done through environment variables in the `.env` file:
 Use the Python script to load data:
 
 ```bash
-docker exec -it spark-master python /opt/spark/scripts/extract_load.py table_name
+docker exec -it spark-master python /opt/spark/scripts/extract_load.py table_name load_type
 ```
+The load_type can be full or incremental.
 
 ### Querying with Trino
 
