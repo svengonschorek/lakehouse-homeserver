@@ -19,7 +19,7 @@ RUN apt-get update && \
 # ENV variables
 ENV SPARK_HOME=${SPARK_HOME:-"/opt/spark"}
 ENV HADOOP_HOME=${HADOOP_HOME:-"/opt/hadoop"}
-ENV SPARK_VERSION=3.5.6
+ENV SPARK_VERSION=3.5.7
 ENV PYTHONPATH=$SPARK_HOME/python/
 
 ENV PATH="/opt/spark/sbin:/opt/spark/bin:${PATH}"
